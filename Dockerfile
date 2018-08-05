@@ -5,6 +5,9 @@ RUN go build -ldflags "-s -w" -o bin/cwl-alert-notifier -v
 
 FROM alpine
 
+RUN apk add --update ca-certificates && \
+    rm -rf /var/cache/apk/*
+
 COPY --from=builder \
     /go/src/github.com/yuichiro-h/cwl-alert-notifier/bin/cwl-alert-notifier \
     /cwl-alert-notifier
