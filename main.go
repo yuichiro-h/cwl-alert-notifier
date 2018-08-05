@@ -156,13 +156,16 @@ func execute() error {
 			eventAt := time.Unix(*e.Timestamp/1000, 0).In(time.Local)
 
 			// ログ内容
+			var body string
 			var msg map[string]interface{}
 			if err := json.Unmarshal([]byte(*e.Message), &msg); err != nil {
-				return errors.WithStack(err)
-			}
-			body, err := json.MarshalIndent(&msg, "", "    ")
-			if err != nil {
-				return errors.WithStack(err)
+				body = *e.Message
+			} else {
+				data, err := json.MarshalIndent(&msg, "", "    ")
+				if err != nil {
+					return errors.WithStack(err)
+				}
+				body = string(data)
 			}
 
 			log.Get().Debug("get log event",
