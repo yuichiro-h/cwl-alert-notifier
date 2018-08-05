@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/gobwas/glob"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"github.com/yuichiro-h/cwl-alert-notifier/config"
@@ -135,7 +136,7 @@ func execute() error {
 				appName = jobDefinitionName
 
 				for _, a := range config.Get().AWS.AWSBatch {
-					if a.SlackChannel != nil && a.JobDefinitionName == jobDefinitionName {
+					if a.SlackChannel != nil && glob.MustCompile(a.JobDefinitionName).Match(jobDefinitionName) {
 						channel = *a.SlackChannel
 					}
 				}
@@ -143,7 +144,7 @@ func execute() error {
 				appName = *filter.LogGroupName
 
 				for _, a := range config.Get().AWS.LogGroup {
-					if a.SlackChannel != nil && a.Name == appName {
+					if a.SlackChannel != nil && glob.MustCompile(a.Name).Match(appName) {
 						channel = *a.SlackChannel
 					}
 				}
