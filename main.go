@@ -133,7 +133,7 @@ func execute() error {
 			if *filter.LogGroupName == "/aws/batch/job" {
 				// AWS Batchのログストリーム名は{jobDefinitionName}/default/{ecs_task_id}の形式
 				jobDefinitionName := strings.Split(*e.LogStreamName, "/")[0]
-				appName = jobDefinitionName
+				appName = fmt.Sprintf("%s(AWS Batch)", jobDefinitionName)
 
 				for _, a := range config.Get().AWS.AWSBatch {
 					if a.SlackChannel != nil && glob.MustCompile(a.JobDefinitionName).Match(jobDefinitionName) {
