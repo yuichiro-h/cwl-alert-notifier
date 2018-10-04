@@ -109,23 +109,31 @@ func execute() error {
 		startTime := stateChangeTime.Add(time.Second * time.Duration(-config.Get().Log.RangeDuration.Before))
 		endTime := stateChangeTime.Add(time.Second * time.Duration(config.Get().Log.RangeDuration.After))
 
-		filterLogEventOut, err := cwl.FilterLogEvents(&cloudwatchlogs.FilterLogEventsInput{
+		var events []*cloudwatchlogs.FilteredLogEvent
+		err = cwl.FilterLogEventsPages(&cloudwatchlogs.FilterLogEventsInput{
 			LogGroupName:  filter.LogGroupName,
 			FilterPattern: filter.FilterPattern,
 			Limit:         aws.Int64(config.Get().Log.Limit),
 			StartTime:     aws.Int64(startTime.Unix() * 1000),
 			EndTime:       aws.Int64(endTime.Unix() * 1000),
+		}, func(output *cloudwatchlogs.FilterLogEventsOutput, lastPage bool) bool {
+			if len(output.Events) > 0 {
+				events = append(events, output.Events...)
+			}
+
+			return !lastPage
 		})
 		if err != nil {
 			return errors.WithStack(err)
 		}
+
 		log.Get().Info("get log event",
 			zap.Int64("limit", config.Get().Log.Limit),
 			zap.Time("start_time", startTime),
 			zap.Time("end_time", endTime),
-			zap.Int("count", len(filterLogEventOut.Events)))
+			zap.Int("count", len(events)))
 
-		for _, e := range filterLogEventOut.Events {
+		for _, e := range events {
 			var appName string
 
 			// Slackの通知先を取得
