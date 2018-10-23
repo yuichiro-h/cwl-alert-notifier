@@ -146,6 +146,7 @@ func execute() error {
 				for _, a := range config.Get().AWS.AWSBatch {
 					if a.SlackChannel != nil && glob.MustCompile(a.JobDefinitionName).Match(jobDefinitionName) {
 						channel = *a.SlackChannel
+						break
 					}
 				}
 			} else {
@@ -154,6 +155,7 @@ func execute() error {
 				for _, a := range config.Get().AWS.LogGroup {
 					if a.SlackChannel != nil && glob.MustCompile(a.Name).Match(appName) {
 						channel = *a.SlackChannel
+						break
 					}
 				}
 			}
