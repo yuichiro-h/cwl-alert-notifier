@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go/service/sqs"
@@ -32,6 +33,9 @@ func main() {
 		if err := config.Load(configFilename); err != nil {
 			return err
 		}
+		log.SetConfig(log.Config{
+			Debug: config.Get().Debug,
+		})
 
 		return nil
 	}
@@ -54,33 +58,31 @@ func execute() error {
 
 	var alarms []Alarm
 	var sqsReceiptHandles []*string
-	for {
-		receiveMessageOut, err := sqsCli.ReceiveMessage(&sqs.ReceiveMessageInput{
-			MaxNumberOfMessages: aws.Int64(10),
-			QueueUrl:            aws.String(config.Get().AWS.AlarmSqsURL),
-		})
-		if err != nil {
+	receiveMessageOut, err := sqsCli.ReceiveMessage(&sqs.ReceiveMessageInput{
+		MaxNumberOfMessages: aws.Int64(10),
+		QueueUrl:            aws.String(config.Get().AWS.AlarmSqsURL),
+	})
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	if len(receiveMessageOut.Messages) == 0 {
+		log.Get().Debug("not found messages", zap.String("queue_url", config.Get().AWS.AlarmSqsURL))
+		return nil
+	}
+
+	for _, msg := range receiveMessageOut.Messages {
+		var snsPayload map[string]interface{}
+		if err := json.Unmarshal([]byte(*msg.Body), &snsPayload); err != nil {
 			return errors.WithStack(err)
 		}
-		if len(receiveMessageOut.Messages) == 0 {
-			log.Get().Debug("not found messages", zap.String("queue_url", config.Get().AWS.AlarmSqsURL))
-			break
+
+		var alarm Alarm
+		if err := json.Unmarshal([]byte(snsPayload["Message"].(string)), &alarm); err != nil {
+			return errors.WithStack(err)
 		}
+		alarms = append(alarms, alarm)
 
-		for _, msg := range receiveMessageOut.Messages {
-			var snsPayload map[string]interface{}
-			if err := json.Unmarshal([]byte(*msg.Body), &snsPayload); err != nil {
-				return errors.WithStack(err)
-			}
-
-			var alarm Alarm
-			if err := json.Unmarshal([]byte(snsPayload["Message"].(string)), &alarm); err != nil {
-				return errors.WithStack(err)
-			}
-			alarms = append(alarms, alarm)
-
-			sqsReceiptHandles = append(sqsReceiptHandles, msg.ReceiptHandle)
-		}
+		sqsReceiptHandles = append(sqsReceiptHandles, msg.ReceiptHandle)
 	}
 	log.Get().Info("found alarm", zap.Int("count", len(alarms)))
 
@@ -110,21 +112,39 @@ func execute() error {
 		endTime := stateChangeTime.Add(time.Second * time.Duration(config.Get().Log.RangeDuration.After))
 
 		var events []*cloudwatchlogs.FilteredLogEvent
-		err = cwl.FilterLogEventsPages(&cloudwatchlogs.FilterLogEventsInput{
-			LogGroupName:  filter.LogGroupName,
-			FilterPattern: filter.FilterPattern,
-			Limit:         aws.Int64(config.Get().Log.Limit),
-			StartTime:     aws.Int64(startTime.Unix() * 1000),
-			EndTime:       aws.Int64(endTime.Unix() * 1000),
-		}, func(output *cloudwatchlogs.FilterLogEventsOutput, lastPage bool) bool {
-			if len(output.Events) > 0 {
-				events = append(events, output.Events...)
+		var nextToken *string
+		for {
+			out, err := cwl.FilterLogEvents(&cloudwatchlogs.FilterLogEventsInput{
+				LogGroupName:  filter.LogGroupName,
+				FilterPattern: filter.FilterPattern,
+				Limit:         aws.Int64(config.Get().Log.Limit),
+				StartTime:     aws.Int64(startTime.Unix() * 1000),
+				EndTime:       aws.Int64(endTime.Unix() * 1000),
+				NextToken:     nextToken,
+			})
+			if err != nil {
+				if awsErr, ok := err.(awserr.Error); ok {
+					// 1秒(TPS)/アカウント/リージョンあたり5件のトランザクションのためAPI Limitになりやすい
+					// API Limitの時は1秒スリープしてからリトライする
+					if awsErr.Code() == "ThrottlingException" {
+						time.Sleep(1 * time.Second)
+						continue
+					} else {
+						return errors.WithStack(awsErr)
+					}
+				}
+				return errors.WithStack(err)
 			}
 
-			return !lastPage
-		})
-		if err != nil {
-			return errors.WithStack(err)
+			if len(out.Events) > 0 {
+				events = append(events, out.Events...)
+			}
+
+			nextToken = out.NextToken
+
+			if nextToken == nil {
+				break
+			}
 		}
 
 		log.Get().Info("get log event",

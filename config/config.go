@@ -10,7 +10,7 @@ import (
 var c Config
 
 type Config struct {
-	Debug bool
+	Debug bool `yaml:"debug"`
 
 	Log struct {
 		Limit         int64 `yaml:"limit"`
