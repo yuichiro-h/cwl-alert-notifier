@@ -2,7 +2,7 @@ BINARY_NAME=cwl-alert-notifier
 
 all: build
 run:
-	go run *.go --config config.dev.yml
+	CONFIG_PATH=config.dev.yml go run *.go
 build:
 	go build -o bin/$(BINARY_NAME) -v
 test:
