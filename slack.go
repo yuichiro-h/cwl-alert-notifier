@@ -11,7 +11,7 @@ import (
 
 type notifyInput struct {
 	ApplicationName string
-	Channel         string
+	Slack           config.SlackConfig
 	FirstLogURL     string
 	Body            []string
 }
@@ -26,7 +26,7 @@ func notify(in *notifyInput) error {
 	}
 
 	attachment := slack.Attachment{
-		Color:      config.Get().Slack.AttachmentColor,
+		Color:      in.Slack.AttachmentColor,
 		MarkdownIn: []string{"text"},
 		Text:       body.String(),
 		Actions: []slack.AttachmentAction{
@@ -40,13 +40,13 @@ func notify(in *notifyInput) error {
 
 	params := slack.PostMessageParameters{
 		Markdown:    true,
-		Username:    config.Get().Slack.Username,
-		IconURL:     config.Get().Slack.IconURL,
+		Username:    in.Slack.Username,
+		IconURL:     in.Slack.IconURL,
 		Attachments: []slack.Attachment{attachment},
 	}
 
 	text := fmt.Sprintf("Found log in *%s*", in.ApplicationName)
-	_, _, err := slack.New(config.Get().Slack.APIToken).PostMessage(in.Channel, text, params)
+	_, _, err := slack.New(in.Slack.ApiToken).PostMessage(in.Slack.Channel, text, params)
 	if err != nil {
 		return errors.WithStack(err)
 	}

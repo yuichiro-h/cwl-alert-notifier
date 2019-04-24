@@ -9,37 +9,62 @@ import (
 
 var c Config
 
+type AlarmName string
+type GroupName string
+
 type Config struct {
 	Debug bool `yaml:"debug"`
 
+	AWS struct {
+		Region string `yaml:"region"`
+	} `yaml:"aws"`
+
 	Log struct {
-		Limit         int64 `yaml:"limit"`
+		Limit         *int64 `yaml:"limit"`
 		RangeDuration struct {
-			Before int64 `yaml:"before"`
-			After  int64 `yaml:"after"`
+			Before *int64 `yaml:"before"`
+			After  *int64 `yaml:"after"`
 		} `yaml:"range_duration"`
 	} `yaml:"log"`
 
-	Slack struct {
-		APIToken        string `yaml:"api_token"`
-		Username        string `yaml:"username"`
-		IconURL         string `yaml:"icon_url"`
-		AttachmentColor string `yaml:"attachment_color"`
-		DefaultChannel  string `yaml:"default_channel"`
-	} `yaml:"slack"`
+	Slack  SlackConfig         `yaml:"slack"`
+	Alarms map[AlarmName]Alarm `yaml:"alarms"`
+}
 
-	AWS struct {
-		Region      string `yaml:"region"`
-		AlarmSqsURL string `yaml:"alarm_sqs_url"`
-		LogGroup    []struct {
-			Name         string  `yaml:"name"`
-			SlackChannel *string `yaml:"slack_channel"`
-		} `yaml:"log_group"`
-		AWSBatch []struct {
-			JobDefinitionName string  `yaml:"job_definition_name"`
-			SlackChannel      *string `yaml:"slack_channel"`
-		} `yaml:"awsbatch"`
-	} `yaml:"aws"`
+type SlackConfig struct {
+	ApiToken        string `yaml:"api_token"`
+	Username        string `yaml:"username"`
+	Channel         string `yaml:"channel"`
+	AttachmentColor string `yaml:"attachment_color"`
+	IconURL         string `yaml:"icon_url"`
+}
+
+func (c *SlackConfig) Merge(sc SlackConfig) {
+	if sc.ApiToken != "" {
+		c.ApiToken = sc.ApiToken
+	}
+	if sc.AttachmentColor != "" {
+		c.AttachmentColor = sc.AttachmentColor
+	}
+	if sc.Channel != "" {
+		c.Channel = sc.Channel
+	}
+	if sc.IconURL != "" {
+		c.IconURL = sc.IconURL
+	}
+	if sc.Username != "" {
+		c.Username = sc.Username
+	}
+}
+
+type Alarm struct {
+	SqsURL string      `yaml:"sqs_url"`
+	Slack  SlackConfig `yaml:"slack"`
+	Groups map[GroupName]struct {
+		Slack                  SlackConfig `yaml:"slack"`
+		LogGroups              []string    `yaml:"log_groups"`
+		AWSBatchJobDefinitions []string    `yaml:"awsbatch_job_definitions"`
+	} `yaml:"groups"`
 }
 
 func Load(filename string) error {

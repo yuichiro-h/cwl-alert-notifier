@@ -6,6 +6,7 @@ require (
 	github.com/aws/aws-sdk-go v1.15.75
 	github.com/gobwas/glob v0.2.3
 	github.com/gorilla/websocket v1.4.0 // indirect
+	github.com/mattn/go-colorable v0.1.1 // indirect
 	github.com/nlopes/slack v0.3.0
 	github.com/pkg/errors v0.8.0
 	github.com/yuichiro-h/go v0.0.0-20180903062432-bffc704a83e0

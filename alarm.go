@@ -1,6 +1,6 @@
 package main
 
-type Alarm struct {
+type CloudWatchAlarm struct {
 	AlarmName        string       `json:"AlarmName"`
 	AlarmDescription *string      `json:"AlarmDescription"`
 	AWSAccountID     string       `json:"AWSAccountId"`
