@@ -60,7 +60,6 @@ type Alarm struct {
 	SqsURL string      `yaml:"sqs_url"`
 	Slack  SlackConfig `yaml:"slack"`
 	Groups []struct {
-		Name                   string      `yaml:"name"`
 		Slack                  SlackConfig `yaml:"slack"`
 		LogGroups              []string    `yaml:"log_groups"`
 		AWSBatchJobDefinitions []string    `yaml:"awsbatch_job_definitions"`
