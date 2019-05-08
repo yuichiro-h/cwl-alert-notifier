@@ -10,7 +10,6 @@ import (
 var c Config
 
 type AlarmName string
-type GroupName string
 
 type Config struct {
 	Debug bool `yaml:"debug"`
@@ -60,7 +59,8 @@ func (c *SlackConfig) Merge(sc SlackConfig) {
 type Alarm struct {
 	SqsURL string      `yaml:"sqs_url"`
 	Slack  SlackConfig `yaml:"slack"`
-	Groups map[GroupName]struct {
+	Groups []struct {
+		Name                   string      `yaml:"name"`
 		Slack                  SlackConfig `yaml:"slack"`
 		LogGroups              []string    `yaml:"log_groups"`
 		AWSBatchJobDefinitions []string    `yaml:"awsbatch_job_definitions"`

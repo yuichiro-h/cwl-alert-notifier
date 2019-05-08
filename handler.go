@@ -142,11 +142,11 @@ func (h *AlarmHandler) Handle(ctx *sqsrouter.Context) {
 			appName = fmt.Sprintf("%s(AWS Batch)", jobDefinitionName)
 
 		L1:
-			for _, v := range h.alarm.Groups {
-				for _, def := range v.AWSBatchJobDefinitions {
+			for _, g := range h.alarm.Groups {
+				for _, def := range g.AWSBatchJobDefinitions {
 					if glob.MustCompile(def).Match(jobDefinitionName) {
 						slack.Merge(h.alarm.Slack)
-						slack.Merge(v.Slack)
+						slack.Merge(g.Slack)
 						break L1
 					}
 				}
@@ -155,11 +155,11 @@ func (h *AlarmHandler) Handle(ctx *sqsrouter.Context) {
 			appName = *filter.LogGroupName
 
 		L2:
-			for _, v := range h.alarm.Groups {
-				for _, lg := range v.LogGroups {
+			for _, g := range h.alarm.Groups {
+				for _, lg := range g.LogGroups {
 					if glob.MustCompile(lg).Match(appName) {
 						slack.Merge(h.alarm.Slack)
-						slack.Merge(v.Slack)
+						slack.Merge(g.Slack)
 						break L2
 					}
 				}
