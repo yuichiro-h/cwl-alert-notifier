@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
+	"github.com/cenkalti/backoff"
 	"github.com/gobwas/glob"
 	"github.com/yuichiro-h/cwl-alert-notifier/config"
 	"github.com/yuichiro-h/cwl-alert-notifier/log"
@@ -58,7 +58,8 @@ func (h *AlarmHandler) Handle(ctx *sqsrouter.Context) {
 		zap.String("metric_namespace", cwAlarm.Trigger.Namespace),
 		zap.String("metric_name", cwAlarm.Trigger.MetricName),
 		zap.String("log_group", *filter.LogGroupName),
-		zap.String("filter", *filter.FilterPattern))
+		zap.String("filter", *filter.FilterPattern),
+		zap.String("state_change_time", cwAlarm.StateChangeTime))
 
 	// ログの取得範囲の算出
 	stateChangeTime, err := time.Parse("2006-01-02T15:04:05.999-0700", cwAlarm.StateChangeTime)
@@ -76,37 +77,30 @@ func (h *AlarmHandler) Handle(ctx *sqsrouter.Context) {
 		logRangeDurationAfter = time.Duration(*config.Get().Log.RangeDuration.After) * time.Second
 	}
 
-	startTime := stateChangeTime.Add(logRangeDurationBefore)
-	endTime := stateChangeTime.Add(logRangeDurationAfter)
+	startTime := stateChangeTime.Add(logRangeDurationBefore).UTC()
+	endTime := stateChangeTime.Add(logRangeDurationAfter).UTC()
 
 	// ログを取得
-	limit := int64(10)
-	if config.Get().Log.Limit != nil {
-		limit = *config.Get().Log.Limit
-	}
 	var events []*cloudwatchlogs.FilteredLogEvent
 	var nextToken *string
 	for {
-		out, err := cwl.FilterLogEvents(&cloudwatchlogs.FilterLogEventsInput{
-			LogGroupName:  filter.LogGroupName,
-			FilterPattern: filter.FilterPattern,
-			Limit:         aws.Int64(limit),
-			StartTime:     aws.Int64(startTime.Unix() * 1000),
-			EndTime:       aws.Int64(endTime.Unix() * 1000),
-			NextToken:     nextToken,
-		})
-		if err != nil {
-			if awsErr, ok := err.(awserr.Error); ok {
-				// 1秒(TPS)/アカウント/リージョンあたり5件のトランザクションのためAPI Limitになりやすい
-				// API Limitの時は1秒スリープしてからリトライする
-				if awsErr.Code() == "ThrottlingException" {
-					time.Sleep(1 * time.Second)
-					continue
-				} else {
-					log.Get().Error(err.Error())
-					return
-				}
+		var out *cloudwatchlogs.FilterLogEventsOutput
+		err := backoff.Retry(func() error {
+			out, err = cwl.FilterLogEvents(&cloudwatchlogs.FilterLogEventsInput{
+				LogGroupName:  filter.LogGroupName,
+				FilterPattern: filter.FilterPattern,
+				StartTime:     aws.Int64(startTime.UnixNano() / int64(time.Millisecond)),
+				EndTime:       aws.Int64(endTime.UnixNano() / int64(time.Millisecond)),
+				Interleaved:   aws.Bool(true),
+				NextToken:     nextToken,
+			})
+			if err != nil {
+				return err
 			}
+
+			return nil
+		}, backoff.NewExponentialBackOff())
+		if err != nil {
 			log.Get().Error(err.Error())
 			return
 		}
@@ -116,17 +110,24 @@ func (h *AlarmHandler) Handle(ctx *sqsrouter.Context) {
 		}
 
 		nextToken = out.NextToken
-
-		if nextToken == nil {
+		if nextToken == nil || len(out.Events) == 0 {
 			break
 		}
 	}
 
-	log.Get().Info("get log event",
-		zap.Int64("limit", limit),
-		zap.Time("start_time", startTime),
-		zap.Time("end_time", endTime),
-		zap.Int("count", len(events)))
+	if len(events) == 0 {
+		log.Get().Warn("not found alarm event",
+			zap.String("metric_namespace", cwAlarm.Trigger.Namespace),
+			zap.String("metric_name", cwAlarm.Trigger.MetricName),
+			zap.String("log_group", *filter.LogGroupName),
+			zap.String("filter", *filter.FilterPattern),
+			zap.String("state_change_time", cwAlarm.StateChangeTime))
+
+		ctx.SetDeleteOnFinish(true)
+		return
+	}
+
+	log.Get().Info("get log event", zap.Int("count", len(events)))
 
 	// ログを通知
 	var notifyInputs []notifyInput

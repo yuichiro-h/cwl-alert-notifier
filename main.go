@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"os/signal"
-	"syscall"
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/yuichiro-h/cwl-alert-notifier/config"
@@ -14,7 +13,6 @@ import (
 func main() {
 	if err := config.Load(os.Getenv("CONFIG_PATH")); err != nil {
 		panic(err)
-		return
 	}
 	log.SetConfig(log.Config{
 		Debug: config.Get().Debug,
@@ -29,8 +27,8 @@ func main() {
 
 	r.Start()
 
-	ch := make(chan os.Signal)
-	signal.Notify(ch, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
 	<-ch
 
 	r.Stop()

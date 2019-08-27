@@ -19,7 +19,6 @@ type Config struct {
 	} `yaml:"aws"`
 
 	Log struct {
-		Limit         *int64 `yaml:"limit"`
 		RangeDuration struct {
 			Before *int64 `yaml:"before"`
 			After  *int64 `yaml:"after"`

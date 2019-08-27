@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/aws/aws-sdk-go v1.15.75
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/gobwas/glob v0.2.3
 	github.com/gorilla/websocket v1.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.1 // indirect
